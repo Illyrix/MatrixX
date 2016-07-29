@@ -48,3 +48,5 @@ Release_TS
 Debug_TS
 .vs
 Backup
+/MatrixX.VC.db
+/MatrixX.VC.VC.opendb

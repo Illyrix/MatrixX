@@ -38,10 +38,7 @@ void matrix_dtor(zend_rsrc_list_entry* rsrc TSRMLS_DC)
 {
         Matrix_rsrc* matrix;
         matrix = (Matrix_rsrc*)rsrc->ptr;           
-        for (ulong i = 0; i < matrix->_n; i++) 
-            efree(matrix->_matrix[i]);
-        efree(matrix->_matrix);
-        efree(matrix);
+        CLEAN_MATRIX_RSRC(matrix);
 }
 
 /* {{{ PHP_INI
@@ -511,7 +508,76 @@ PHP_FUNCTION(matrix_product)
 
 PHP_FUNCTION(matrix_divide)
 {
-    
+    CHECK_ARG_NUMS(2)
+        zval *param1;
+    zval *param2;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z/z/", &param1, &param2) == SUCCESS) {
+        if (Z_TYPE_P(param1) == IS_RESOURCE && Z_TYPE_P(param2) == IS_RESOURCE) {           //Case param1 and 2 are both resource
+            Matrix_rsrc* rs1;
+            Matrix_rsrc* rs2;
+            //Read resource
+            ZEND_FETCH_RESOURCE(rs1, Matrix_rsrc *, &param1, -1, "Matrix resource", le_MatrixX);
+            ZEND_FETCH_RESOURCE(rs2, Matrix_rsrc *, &param2, -1, "Matrix resource", le_MatrixX);
+            if (rs1 == NULL || rs2 == NULL) {
+                RETURN_FALSE;
+            }
+            if (rs1->_n != rs2->_m || rs2->_m != rs2->_n) {                   //Param1 is a M*N matrix, Param2 is a N*N matrix
+                zend_error(E_WARNING, "The matrices input is invalid in %s()", get_active_function_name(TSRMLS_C));
+                RETURN_FALSE;
+            }
+
+            Matrix_rsrc* temp = matrix_inverse(rs2);
+            if (temp->_n == 0 && temp->_m == 0) {
+                zend_error(E_WARNING, "Divisor is not an invertible matrix in %s()", get_active_function_name(TSRMLS_C));
+                RETURN_FALSE;
+            }
+            else {
+                ZEND_REGISTER_RESOURCE(return_value, matrix_product_matrix(rs1, temp), le_MatrixX);
+            }
+        }
+        else
+            //Case param1 is resource and param2 is real
+            if (Z_TYPE_P(param1) == IS_RESOURCE && (Z_TYPE_P(param2) == IS_LONG || Z_TYPE_P(param2) == IS_DOUBLE)) {
+                Matrix_rsrc* rs1;
+                double d2;
+                ZEND_FETCH_RESOURCE(rs1, Matrix_rsrc *, &param1, -1, "Matrix resource", le_MatrixX);
+                if (rs1 == NULL) {
+                    RETURN_FALSE;
+                }
+                convert_to_double_ex(&param2);
+                d2 = Z_DVAL_P(param2);
+                if (fabs(d2) < MIN_DOUBLE_ZERO) {
+                    zend_error(E_WARNING, "Divisor cannot be zero in %s()", get_active_function_name(TSRMLS_C));
+                    RETURN_FALSE;
+                }
+                ZEND_REGISTER_RESOURCE(return_value, matrix_product_real(rs1, (1.0/d2)), le_MatrixX);
+            }
+            else
+                if (Z_TYPE_P(param2) == IS_RESOURCE && (Z_TYPE_P(param1) == IS_LONG || Z_TYPE_P(param1) == IS_DOUBLE)) {
+                    //The case param1 is real and param2 is a resource
+                    Matrix_rsrc* rs2;
+                    double d1;
+                    ZEND_FETCH_RESOURCE(rs2, Matrix_rsrc *, &param2, -1, "Matrix resource", le_MatrixX);
+                    if (rs2 == NULL) {
+                        RETURN_FALSE;
+                    }
+                    convert_to_double_ex(&param1);
+                    d1 = Z_DVAL_P(param1);
+                    Matrix_rsrc* temp = matrix_inverse(rs2);
+                    if (temp->_n == 0 && temp->_m == 0) {
+                        zend_error(E_WARNING, "Divisor is not a invertible matrix in %s()", get_active_function_name(TSRMLS_C));
+                        RETURN_FALSE;
+                    }
+                    ZEND_REGISTER_RESOURCE(return_value, matrix_product_real(temp, d1), le_MatrixX);
+                }
+                else {
+                    zend_error(E_WARNING, "Error input type in %s()", get_active_function_name(TSRMLS_C));
+                    RETURN_FALSE;
+                }
+    }
+    else {
+        RETURN_FALSE;
+    }
 
 }
 
@@ -545,12 +611,47 @@ PHP_FUNCTION(matrix_transpose)
 
 PHP_FUNCTION(matrix_inverse)
 {
-
+    CHECK_ARG_NUMS(1)
+        zval *param;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &param) == SUCCESS) {
+        Matrix_rsrc* rs;
+        ZEND_FETCH_RESOURCE(rs, Matrix_rsrc *, &param, -1, "Matrix resource", le_MatrixX);
+        if (rs == NULL) {
+            RETURN_FALSE;
+        }
+        if (rs->_m != rs->_n) {
+            zend_error(E_WARNING, "Not a square matrix in %s()", get_active_function_name(TSRMLS_C));
+            RETURN_FALSE;
+        }
+        Matrix_rsrc* result = matrix_inverse(rs);
+        if ((result->_m == 0) && (result->_n == 0)) {
+            zend_error(E_WARNING, "Not a invertible matrix in %s()", get_active_function_name(TSRMLS_C));
+            RETURN_FALSE;
+        }
+        ZEND_REGISTER_RESOURCE(return_value, result, le_MatrixX);
+    }
+    else {
+        RETURN_FALSE;
+    }
 }
 
 PHP_FUNCTION(matrix_rank)
 {
-
+    CHECK_ARG_NUMS(1)
+        zval *param;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &param) == SUCCESS) {
+        Matrix_rsrc* rs;
+        ZEND_FETCH_RESOURCE(rs, Matrix_rsrc *, &param, -1, "Matrix resource", le_MatrixX);
+        if (rs == NULL) {
+            RETURN_FALSE;
+        }
+        if (rs->_rank != 0)
+            RETURN_LONG(rs->_rank);
+        RETURN_LONG(matrix_rank(rs));
+    }
+    else {
+        RETURN_FALSE;
+    }
 }
 
 PHP_FUNCTION(matrix_dump)
@@ -799,6 +900,137 @@ Matrix_rsrc* matrix_product_real(Matrix_rsrc* a, double b) {
     }
     return result;
 }
+
+Matrix_rsrc* matrix_inverse(Matrix_rsrc* x) {
+    Matrix_rsrc* result = emalloc(sizeof(Matrix_rsrc));
+    result->_m = x->_m;
+    result->_n = x->_n;
+    result->_matrix = ecalloc(result->_m, sizeof(double*));
+    for (ulong i = 0; i < result->_m; i++) {
+        result->_matrix[i] = ecalloc(result->_n, sizeof(double));
+        for (ulong j = 0; j < result->_n; j++) {
+            result->_matrix[i][j] = x->_matrix[i][j];
+        }
+    }
+    int *i_save = (int *)ecalloc(x->_n, sizeof(int));
+    int *j_save = (int *)ecalloc(x->_n, sizeof(int));
+
+    double fmax, temp;
+    ulong i, j;
+
+    for (ulong k = 0; k < x->_n; k++)
+    {
+        fmax = 0.0;
+        for (i = k; i < x->_n; i++)
+            for (j = k; j < x->_n; j++)
+            {
+                temp = fabs(x->_matrix[i][j]);          //Find the max
+                if (temp > fmax)
+                {
+                    fmax = temp;
+                    i_save[k] = i; 
+                    j_save[k] = j;
+                }
+            }
+        if ((i = i_save[k]) != k)
+            for (j = 0; j < x->_n; j++)
+                swap(&(result->_matrix[k][j]), &(result->_matrix[i][j]));
+        if ((j = j_save[k]) != k)
+            for (i = 0; i<result->_n; i++)
+                swap(&(result->_matrix[i][k]), &(result->_matrix[i][j]));
+        if (fmax < MIN_DOUBLE_ZERO || fabs(result->_matrix[k][k]) < MIN_DOUBLE_ZERO)        //Not a invertible matrix
+        {
+            efree(i_save);
+            efree(j_save);
+            for (ulong l = 0; l < result->_m; l++)
+                efree(result->_matrix[l]);
+            efree(result->_matrix);
+            result->_m = 0;
+            result->_n = 0;
+            return result;
+        }
+        result->_matrix[k][k] = 1.0 / result->_matrix[k][k];
+        for (j = 0; j < result->_n; j++)
+            if (j != k)
+                result->_matrix[k][j] *= result->_matrix[k][k];
+        for (i = 0; i < result->_n; i++)
+            if (i != k)
+                for (j = 0; j < result->_n; j++)
+                    if (j != k)
+                        result->_matrix[i][j] = result->_matrix[i][j] - result->_matrix[i][k] * result->_matrix[k][j];
+        for (i = 0; i < result->_n; i++)
+            if (i != k)
+                result->_matrix[i][k] *= -result->_matrix[k][k];
+    }
+    for (int k = (result->_n - 1); k >= 0; k--)
+    {
+        if ((j = j_save[k]) != k)
+            for (i = 0; i < result->_n; i++)
+                swap(&(result->_matrix[j][i]), &(result->_matrix[k][i]));
+        if ((i = i_save[k]) != k)
+            for (j = 0; j < result->_n; j++)
+                swap(&(result->_matrix[j][i]), &(result->_matrix[j][k]));
+    }
+    efree(i_save);
+    efree(j_save);
+    return result;
+}
+
+int matrix_rank(Matrix_rsrc* x) {
+    ulong i, j, n, m, ri, ci;
+    double t;
+    Matrix_rsrc* y = emalloc(sizeof(Matrix_rsrc));
+    y->_m = x->_m;
+    y->_n = x->_n;
+    y->_rank = x->_rank;
+    y->_matrix = ecalloc(y->_n, sizeof(double*));
+
+    n = x->_n;
+    m = x->_m;
+    for (i = 0; i < n; i++) {
+        y->_matrix[i] = ecalloc(y->_m, sizeof(double));
+        for (j = 0; j < m; j++)
+            y->_matrix[i][j] = x->_matrix[i][j];
+    }
+
+    unsigned short flag_zero;
+    for (ri = ci = 0; ci <m; ci++) {
+        flag_zero = 1;
+        for (i = ri; i < n; i++) 
+            if (y->_matrix[i][ci] >= MIN_DOUBLE_ZERO) {
+                if (i != ri)
+                    if (flag_zero) {
+                        //Exchange row
+                        ulong a;
+                        double b;
+                        for (a = ci; a < m; a++) {
+                            b = y->_matrix[ri][a];
+                            y->_matrix[ri][a] = y->_matrix[i][a];
+                            y->_matrix[i][a] = b;
+                        }
+                    }
+                    else {
+                        t = y->_matrix[i][ci];
+                        for (ulong a = ci; a < m; a++) 
+                            y->_matrix[i][a] *= y->_matrix[ri][ci];
+                        for (ulong a = ci; a < m; a++)
+                            y->_matrix[i][a] += -t * y->_matrix[ri][a];
+                    }
+                    flag_zero = 0;
+            }
+            if (!flag_zero)
+                ri++;
+        }
+    x->_rank = ri;
+    CLEAN_MATRIX_RSRC(y);
+    return ri;
+}
+inline void swap(double *a, double *b) {
+    double temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
 /*
  * Local variables:
  * tab-width: 4

@@ -76,10 +76,19 @@ ZEND_END_MODULE_GLOBALS(MatrixX)
  * vim<600: noet sw=4 ts=4
  */
 
+#define MIN_DOUBLE_ZERO 0.00001
+
 #define CHECK_ARG_NUMS(v) if (ZEND_NUM_ARGS() != v) {\
 WRONG_PARAM_COUNT;\
 RETURN_FALSE;\
 }\
+
+
+#define CLEAN_MATRIX_RSRC(r) \
+for (ulong l = 0; l < r->_n; l++)\
+    efree(r->_matrix[l]);\
+efree(r->_matrix);\
+efree(r)
 
 
 typedef struct _matrix_rsrc {
@@ -89,8 +98,12 @@ typedef struct _matrix_rsrc {
     ulong _rank;
 } Matrix_rsrc;
 
+inline void swap(double*, double*);
+
 Matrix_rsrc* matrix_add_matrix(Matrix_rsrc*, Matrix_rsrc*);
 Matrix_rsrc* matrix_add_real(Matrix_rsrc*, double);
 
 Matrix_rsrc* matrix_product_matrix(Matrix_rsrc*, Matrix_rsrc*);
 Matrix_rsrc* matrix_product_real(Matrix_rsrc*, double);
+Matrix_rsrc* matrix_inverse(Matrix_rsrc*);
+int matrix_rank(Matrix_rsrc*);

@@ -115,5 +115,87 @@ n:3
 
 **NOTICE:** If the 2 input matrices do NOT fit the condition of doing product, a warning will be sent out and return `false`.
 
+* `matrix_divide`
+
+It will return the result of the product of 1st param and the inverse of 2nd param. If 2nd param is real, the same result as product of matrix and reciprocal of the real number.
+```
+$arr = [
+    [1, -1, 2, 4],
+    [2, -2, 4, 5],
+    [3, 0, 6, 7]
+];
+$arr2 = [
+    [3, 4, -1],
+    [1, 0, 3],
+    [2, 5, -4]
+];
+$rMatrix1 = matrix_init($arr);
+$rMatrix2 = matrix_init($arr2);
+matrix_dump(matrix_divide($rMatrix1, $rMatrix2));
+```
+It will return:
+>-4.300000 0.700000 -8.600000 -7.900000  
+4.000000 -1.000000 8.000000 8.000000  
+2.100000 -0.900000 4.200000 4.300000  
+m:3  
+n:4  
+
+**NOTICE:** Make sure 1st matrix can do product with the inverse of 2nd matrix. Obviously, the 2nd matrix should be invertible, or a real number as the divisor is NOT zero.
+
+* `matrix_inverse`
+
+It will return the inverse of input matrix, if it has.
+```
+$arr = [
+    [3, 4, -1],
+    [1, 0, 3],
+    [2, 5, -4]
+];
+$rMatrix = matrix_init($arr);
+matrix_dump(matrix_inverse($rMatrix));
+```
+And the output:
+>1.500000 -1.100000 -1.200000  
+-1.000000 1.000000 1.000000  
+-0.500000 0.700000 0.400000  
+m:3  
+n:3  
+
+* `matrix_transpose`
+
+It will return the transpose matrix of input.
+```
+$arr = [
+    [1, -1, 2, 4],
+    [2, -2, 4, 5],
+    [3, 0, 6, 7]
+];
+$rMatrix = matrix_init($arr);
+matrix_dump(matrix_transpose($rMatrix));
+```
+The ouptut will be:
+>1.000000 2.000000 3.000000  
+-1.000000 -2.000000 0.000000  
+2.000000 4.000000 6.000000  
+4.000000 5.000000 7.000000  
+m:4  
+n:3
+
+* `matrix_rank`
+
+The return value is a long int which is the rank of the input matrix.
+```
+$arr = [
+    [1, -1, 2, 1, 0],
+    [2, -2, 4, -2, 0],
+    [3, 0, 6, -1, 1],
+    [0, 3, 0, 0, 1]
+];
+$rMatrix = matrix_init($arr);
+echo matrix_rank($rMatrix);
+```
+Output is:
+>3
+
 ### Support
 Other functions will be add in future.
